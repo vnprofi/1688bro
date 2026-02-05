@@ -30,12 +30,26 @@ def translate_text(text, target_lang="ru"):
         return text
 
 
-def smooth_scroll(driver):
-    current_height = driver.execute_script("return document.body.scrollHeight")
-    for i in range(0, current_height, 200):
-        driver.execute_script(f"window.scrollTo(0, {i});")
-        time.sleep(0.02)
-    time.sleep(0.4)
+def smooth_scroll(driver, max_wait=15):
+    start = time.time()
+    last_height = 0
+    stable_passes = 0
+
+    while time.time() - start < max_wait:
+        current_height = driver.execute_script("return document.body.scrollHeight")
+        if current_height == last_height:
+            stable_passes += 1
+        else:
+            stable_passes = 0
+        last_height = current_height
+
+        for i in range(0, current_height, 250):
+            driver.execute_script(f"window.scrollTo(0, {i});")
+            time.sleep(0.015)
+        time.sleep(0.25)
+
+        if stable_passes >= 2:
+            break
 
 
 def scrape_items_on_page(driver, log):
@@ -456,10 +470,10 @@ class ScraperApp:
                     if items:
                         break
                     if attempt == 0:
-                        self.log("!!! ПУСТО. Возможно КАПЧА !!!")
-                        messagebox.showinfo("1688_soft", "Пройдите капчу в браузере и нажмите OK.")
+                        self.log("Пусто. Возможно, страница еще грузится или нужен вход/регистрация.")
+                        time.sleep(2)
                 if len(items) == 0:
-                    self.log("Данные не получены после капчи. Останавливаемся.")
+                    self.log("Данные не получены. Останавливаемся.")
                     break
 
                 for item in items:
