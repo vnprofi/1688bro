@@ -57,7 +57,7 @@ def scrape_items_on_page(driver, log):
     if not cards:
         return []
 
-    log(f"  -> РќР°Р№РґРµРЅРѕ РєР°СЂС‚РѕС‡РµРє: {len(cards)}")
+    log(f"  -> Найдено карточек: {len(cards)}")
 
     items_data = []
 
@@ -287,10 +287,10 @@ class ScraperApp:
 
     def start_browser(self):
         if self.running:
-            self.log("РџСЂРѕС†РµСЃСЃ СѓР¶Рµ РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ.")
+            self.log("Процесс уже выполняется.")
             return
         if self.driver:
-            self.log("Р‘СЂР°СѓР·РµСЂ СѓР¶Рµ РѕС‚РєСЂС‹С‚.")
+            self.log("Браузер уже открыт.")
             return
         self.running = True
         threading.Thread(target=self._start_browser_worker, daemon=True).start()
@@ -304,23 +304,23 @@ class ScraperApp:
             options.add_experimental_option("useAutomationExtension", False)
 
             self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-            self.log("РћС‚РєСЂС‹РІР°РµРј https://alibaba.cn ...")
+            self.log("Открываем https://alibaba.cn ...")
             self.driver.get("https://alibaba.cn")
-            self.log("Р­РўРђРџ 1: Р’РҐРћР”")
-            self.log("1. Р’РѕР№РґРёС‚Рµ РІ Р°РєРєР°СѓРЅС‚.")
-            self.log("2. РџРѕСЃР»Рµ РІС…РѕРґР° РЅР°Р¶РјРёС‚Рµ 'РќР°С‡Р°С‚СЊ РїР°СЂСЃРёРЅРі'.")
+            self.log("ЭТАП 1: ВХОД")
+            self.log("1. Войдите в аккаунт.")
+            self.log("2. После входа нажмите 'Начать парсинг'.")
         except Exception as exc:
-            self.log(f"РћС€РёР±РєР° Р·Р°РїСѓСЃРєР° Р±СЂР°СѓР·РµСЂР°: {exc}")
+            self.log(f"Ошибка запуска браузера: {exc}")
             self.driver = None
         finally:
             self.running = False
 
     def start_parsing(self):
         if self.running:
-            self.log("РџСЂРѕС†РµСЃСЃ СѓР¶Рµ РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ.")
+            self.log("Процесс уже выполняется.")
             return
         if not self.driver:
-            messagebox.showwarning("1688_soft", "РЎРЅР°С‡Р°Р»Р° РѕС‚РєСЂРѕР№С‚Рµ Р±СЂР°СѓР·РµСЂ.")
+            messagebox.showwarning("1688_soft", "Сначала откройте браузер.")
             return
         self.running = True
         threading.Thread(target=self._parse_worker, daemon=True).start()
@@ -329,28 +329,28 @@ class ScraperApp:
         try:
             if not self.main_categories:
                 self._scan_main_categories()
-                self.log("Р’РІРµРґРёС‚Рµ РЅРѕРјРµСЂ РіР»Р°РІРЅРѕР№ РєР°С‚РµРіРѕСЂРёРё Рё РЅР°Р¶РјРёС‚Рµ 'РќР°С‡Р°С‚СЊ РїР°СЂСЃРёРЅРі' РµС‰Рµ СЂР°Р·.")
+                self.log("Введите номер главной категории и нажмите 'Начать парсинг' еще раз.")
                 return
 
-            main_idx = self._parse_index(self.main_cat_var.get(), len(self.main_categories), "РіР»Р°РІРЅРѕР№ РєР°С‚РµРіРѕСЂРёРё")
+            main_idx = self._parse_index(self.main_cat_var.get(), len(self.main_categories), "главной категории")
             if main_idx is None:
                 return
 
             if self.subcategories_for_main != main_idx or not self.subcategories:
                 self._scan_subcategories(main_idx)
-                self.log("Р’РІРµРґРёС‚Рµ РЅРѕРјРµСЂ РїРѕРґРєР°С‚РµРіРѕСЂРёРё Рё РЅР°Р¶РјРёС‚Рµ 'РќР°С‡Р°С‚СЊ РїР°СЂСЃРёРЅРі' РµС‰Рµ СЂР°Р·.")
+                self.log("Введите номер подкатегории и нажмите 'Начать парсинг' еще раз.")
                 return
 
-            sub_idx = self._parse_index(self.sub_cat_var.get(), len(self.subcategories), "РїРѕРґРєР°С‚РµРіРѕСЂРёРё")
+            sub_idx = self._parse_index(self.sub_cat_var.get(), len(self.subcategories), "подкатегории")
             if sub_idx is None:
                 return
 
             export_dir = self.export_path_var.get().strip()
             if not export_dir:
-                self.log("РЈРєР°Р¶РёС‚Рµ РїСѓС‚СЊ СЌРєСЃРїРѕСЂС‚Р°.")
+                self.log("Укажите путь экспорта.")
                 return
             if not os.path.isdir(export_dir):
-                self.log("РџСѓС‚СЊ СЌРєСЃРїРѕСЂС‚Р° РЅРµ РЅР°Р№РґРµРЅ. Р’С‹Р±РµСЂРёС‚Рµ СЃСѓС‰РµСЃС‚РІСѓСЋС‰СѓСЋ РїР°РїРєСѓ.")
+                self.log("Путь экспорта не найден. Выберите существующую папку.")
                 return
 
             selected_main_cat_name = self.main_categories[main_idx]
@@ -364,8 +364,8 @@ class ScraperApp:
             if os.path.exists(filename):
                 os.remove(filename)
 
-            self.log(f"РџР°СЂСЃРёРЅРі: {selected_sub['name']}")
-            self.log(f"Р”Р°РЅРЅС‹Рµ Р±СѓРґСѓС‚ СЃРѕС…СЂР°РЅСЏС‚СЊСЃСЏ РІ: {filename} (РїРѕСЃР»Рµ РєР°Р¶РґРѕР№ СЃС‚СЂР°РЅРёС†С‹)")
+            self.log(f"Парсинг: {selected_sub['name']}")
+            self.log(f"Данные будут сохраняться в: {filename} (после каждой страницы)")
 
             self.driver.get(selected_sub["url"])
             try:
@@ -395,13 +395,13 @@ class ScraperApp:
             ]
 
             while page_num <= MAX_PAGES:
-                self.log(f"--- РЎС‚СЂР°РЅРёС†Р° {page_num} ---")
+                self.log(f"--- Страница {page_num} ---")
 
                 items = scrape_items_on_page(self.driver, self.log)
 
                 if len(items) == 0:
-                    self.log("!!! РџРЈРЎРўРћ. Р’РѕР·РјРѕР¶РЅРѕ РљРђРџР§Рђ !!!")
-                    messagebox.showinfo("1688_soft", "РџСЂРѕР№РґРёС‚Рµ РєР°РїС‡Сѓ РІ Р±СЂР°СѓР·РµСЂРµ Рё РЅР°Р¶РјРёС‚Рµ OK.")
+                    self.log("!!! ПУСТО. Возможно КАПЧА !!!")
+                    messagebox.showinfo("1688_soft", "Пройдите капчу в браузере и нажмите OK.")
                     items = scrape_items_on_page(self.driver, self.log)
                     if len(items) == 0:
                         break
@@ -419,7 +419,7 @@ class ScraperApp:
                     df.to_csv(filename, mode="a", index=False, header=header_mode, encoding="utf-8-sig", sep=";")
 
                     total_items_collected += len(items)
-                    self.log(f"РЎРѕР±СЂР°РЅРѕ {len(items)} (Р’СЃРµРіРѕ: {total_items_collected}). РЎРѕС…СЂР°РЅРµРЅРѕ РІ С„Р°Р№Р».")
+                    self.log(f"Собрано {len(items)} (Всего: {total_items_collected}). Сохранено в файл.")
 
                 try:
                     next_btns = self.driver.find_elements(By.CSS_SELECTOR, ".fui-arrow.fui-next")
@@ -428,45 +428,50 @@ class ScraperApp:
 
                     btn = next_btns[0]
                     if "disabled" in btn.get_attribute("class") or "fui-prev-disabled" in btn.get_attribute("class"):
-                        self.log("Р­С‚Рѕ РїРѕСЃР»РµРґРЅСЏСЏ СЃС‚СЂР°РЅРёС†Р°.")
+                        self.log("Это последняя страница.")
                         break
+
+                    current_cards = self.driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
+                    first_card = current_cards[0] if current_cards else None
 
                     self.driver.execute_script("arguments[0].click();", btn)
                     page_num += 1
 
                     try:
-                        WebDriverWait(self.driver, 3).until(
+                        if first_card is not None:
+                            WebDriverWait(self.driver, 6).until(EC.staleness_of(first_card))
+                        WebDriverWait(self.driver, 6).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, "a[class*='i18n-card-wrap']"))
                         )
                     except Exception:
-                        time.sleep(0.5)
+                        time.sleep(0.2)
                 except Exception:
                     break
 
-            self.log(f"Р“РћРўРћР’Рћ! Р’РµСЃСЊ РїСЂРѕС†РµСЃСЃ Р·Р°РІРµСЂС€РµРЅ. Р¤Р°Р№Р»: {filename}")
+            self.log(f"ГОТОВО! Весь процесс завершен. Файл: {filename}")
         except Exception as exc:
-            self.log(f"РџСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР°: {exc}")
-            self.log("РќРµ РІРѕР»РЅСѓР№С‚РµСЃСЊ, РІСЃС‘ С‡С‚Рѕ СѓСЃРїРµР»Рё СЃРѕР±СЂР°С‚СЊ РґРѕ СЌС‚РѕРіРѕ РјРѕРјРµРЅС‚Р° - СѓР¶Рµ РІ С„Р°Р№Р»Рµ CSV.")
+            self.log(f"Произошла ошибка: {exc}")
+            self.log("Не волнуйтесь, всё что успели собрать до этого момента - уже в файле CSV.")
         finally:
-            self.log("Р Р°Р±РѕС‚Р° Р·Р°РІРµСЂС€РµРЅР°.")
+            self.log("Работа завершена.")
             self.running = False
 
     def _parse_index(self, value, max_len, label):
         try:
             idx = int(value) - 1
         except ValueError:
-            self.log(f"Р’РІРµРґРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ РЅРѕРјРµСЂ РґР»СЏ {label}.")
+            self.log(f"Введите корректный номер для {label}.")
             return None
         if idx < 0 or idx >= max_len:
-            self.log(f"РќРѕРјРµСЂ {label} РІРЅРµ РґРёР°РїР°Р·РѕРЅР° (1-{max_len}).")
+            self.log(f"Номер {label} вне диапазона (1-{max_len}).")
             return None
         return idx
 
     def _scan_main_categories(self):
-        self.log("РЎРєР°РЅРёСЂСѓРµРј РєР°С‚РµРіРѕСЂРёРё...")
+        self.log("Сканируем категории...")
         main_cat_elems = self.driver.find_elements(By.CSS_SELECTOR, "li.lv1Item--O30i9KsN")
         if not main_cat_elems:
-            self.log("РљР°С‚РµРіРѕСЂРёРё РЅРµ РЅР°Р№РґРµРЅС‹. РЈР±РµРґРёС‚РµСЃСЊ, С‡С‚Рѕ РІС‹ РІРѕС€Р»Рё Рё СЃС‚СЂР°РЅРёС†Р° Р·Р°РіСЂСѓР·РёР»Р°СЃСЊ.")
+            self.log("Категории не найдены. Убедитесь, что вы вошли и страница загрузилась.")
             return
 
         main_cats_list = []
@@ -491,10 +496,10 @@ class ScraperApp:
         self.main_categories = main_cats_list
 
     def _scan_subcategories(self, main_idx):
-        self.log("РџРѕР»СѓС‡Р°РµРј РїРѕРґРєР°С‚РµРіРѕСЂРёРё...")
+        self.log("Получаем подкатегории...")
         main_cat_elems = self.driver.find_elements(By.CSS_SELECTOR, "li.lv1Item--O30i9KsN")
         if main_idx >= len(main_cat_elems):
-            self.log("Р“Р»Р°РІРЅР°СЏ РєР°С‚РµРіРѕСЂРёСЏ РЅРµ РЅР°Р№РґРµРЅР°. РћР±РЅРѕРІРёС‚Рµ СЃС‚СЂР°РЅРёС†Сѓ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.")
+            self.log("Главная категория не найдена. Обновите страницу и попробуйте снова.")
             return
 
         target_li = main_cat_elems[main_idx]
@@ -510,7 +515,7 @@ class ScraperApp:
             )
             sub_rows = popup_ul.find_elements(By.TAG_NAME, "li")
         except Exception:
-            self.log("РџРѕРґРєР°С‚РµРіРѕСЂРёРё РЅРµ РЅР°Р№РґРµРЅС‹. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·.")
+            self.log("Подкатегории не найдены. Попробуйте еще раз.")
             return
 
         available_subcats = []
@@ -519,7 +524,7 @@ class ScraperApp:
             try:
                 group_name = row.find_element(By.CLASS_NAME, "cTitle--Md3f91iK").get_attribute("textContent").strip()
             except Exception:
-                group_name = "РћР±С‰РµРµ"
+                group_name = "Общее"
 
             try:
                 box = row.find_element(By.CLASS_NAME, "cBox--sueyS7qB")
