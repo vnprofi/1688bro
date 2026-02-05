@@ -17,7 +17,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 
 MAX_PAGES = 34
-PAGE_CHANGE_TIMEOUT = 20
+PAGE_CHANGE_TIMEOUT = 10
+SCROLL_PASSES = 3
 
 
 def translate_text(text, target_lang="ru"):
@@ -29,30 +30,28 @@ def translate_text(text, target_lang="ru"):
         return text
 
 
-def smooth_scroll(driver):
+def quick_scroll(driver, passes=SCROLL_PASSES):
     last_height = 0
-    current_height = driver.execute_script("return document.body.scrollHeight")
-
-    while last_height != current_height:
-        last_height = current_height
-        for i in range(0, current_height, 200):
-            driver.execute_script(f"window.scrollTo(0, {i});")
-            time.sleep(0.02)
-        time.sleep(0.4)
+    for _ in range(passes):
         current_height = driver.execute_script("return document.body.scrollHeight")
+        if current_height == last_height:
+            break
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(0.35)
+        last_height = current_height
 
 
 def scrape_items_on_page(driver, log):
-    smooth_scroll(driver)
-    time.sleep(0.3)
+    quick_scroll(driver)
+    time.sleep(0.2)
 
     cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
 
     if len(cards) < 40:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(0.5)
-        smooth_scroll(driver)
         time.sleep(0.3)
+        quick_scroll(driver, passes=2)
+        time.sleep(0.2)
         cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
 
     if not cards:
