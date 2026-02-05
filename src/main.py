@@ -4,6 +4,7 @@ import threading
 import time
 import webbrowser
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import filedialog, messagebox, ttk
 
 import pandas as pd
@@ -166,7 +167,8 @@ class ScraperApp:
         }
 
         self.root.configure(bg=colors["bg"])
-        self.root.option_add("*Font", "Segoe UI 10")
+        default_font = tkfont.Font(family="Segoe UI", size=10)
+        self.root.option_add("*Font", default_font)
         self.root.option_add("*Foreground", colors["text"])
 
         style = ttk.Style(self.root)
