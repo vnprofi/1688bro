@@ -18,7 +18,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 MAX_PAGES = 34
 PAGE_CHANGE_TIMEOUT = 10
-SCROLL_PASSES = 3
 
 
 def translate_text(text, target_lang="ru"):
@@ -30,28 +29,30 @@ def translate_text(text, target_lang="ru"):
         return text
 
 
-def quick_scroll(driver, passes=SCROLL_PASSES):
+def smooth_scroll(driver):
     last_height = 0
-    for _ in range(passes):
-        current_height = driver.execute_script("return document.body.scrollHeight")
-        if current_height == last_height:
-            break
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(0.35)
+    current_height = driver.execute_script("return document.body.scrollHeight")
+
+    while last_height != current_height:
         last_height = current_height
+        for i in range(0, current_height, 200):
+            driver.execute_script(f"window.scrollTo(0, {i});")
+            time.sleep(0.02)
+        time.sleep(0.4)
+        current_height = driver.execute_script("return document.body.scrollHeight")
 
 
 def scrape_items_on_page(driver, log):
-    quick_scroll(driver)
-    time.sleep(0.2)
+    smooth_scroll(driver)
+    time.sleep(0.3)
 
     cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
 
     if len(cards) < 40:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(0.5)
+        smooth_scroll(driver)
         time.sleep(0.3)
-        quick_scroll(driver, passes=2)
-        time.sleep(0.2)
         cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
 
     if not cards:
@@ -268,6 +269,7 @@ class ScraperApp:
             highlightcolor=colors["border"],
         )
         self.log_text.grid(row=5, column=0, sticky="ew", pady=(6, 0))
+        self._bind_log_copy()
 
     def log(self, message):
         timestamp = time.strftime("%H:%M:%S")
@@ -281,6 +283,29 @@ class ScraperApp:
             self.log_text.see("end")
             self.log_text.configure(state="disabled")
         self.root.after(100, self._process_log_queue)
+
+    def _bind_log_copy(self):
+        menu = tk.Menu(self.log_text, tearoff=0)
+        menu.add_command(label="Копировать", command=self._copy_log_selection)
+
+        def show_menu(event):
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+
+        self.log_text.bind("<Button-3>", show_menu)
+        self.log_text.bind("<Control-c>", lambda e: self._copy_log_selection())
+
+    def _copy_log_selection(self):
+        try:
+            text = self.log_text.get("sel.first", "sel.last")
+        except Exception:
+            return
+        if not text:
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
 
     def open_contact(self):
         webbrowser.open("https://t.me/EcommerceGr")
