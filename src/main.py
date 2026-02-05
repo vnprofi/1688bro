@@ -3,6 +3,7 @@ import queue
 import threading
 import time
 import webbrowser
+import json
 import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import filedialog, messagebox, ttk
@@ -364,31 +365,41 @@ class ScraperApp:
         self.log("Остановка запрошена. Завершаем после текущей операции...")
 
     def _parse_worker(self):
+        log_final = True
+        final_message = "Работа завершена."
         try:
             if not self.main_categories:
                 self._scan_main_categories()
                 self.log("Введите номер главной категории и нажмите 'Начать парсинг' еще раз.")
+                log_final = False
+                self.log("Ожидание выбора главной категории...")
                 return
 
             main_idx = self._parse_index(self.main_cat_var.get(), len(self.main_categories), "главной категории")
             if main_idx is None:
+                log_final = False
                 return
 
             if self.subcategories_for_main != main_idx or not self.subcategories:
                 self._scan_subcategories(main_idx)
                 self.log("Введите номер подкатегории и нажмите 'Начать парсинг' еще раз.")
+                log_final = False
+                self.log("Ожидание выбора подкатегории...")
                 return
 
             sub_idx = self._parse_index(self.sub_cat_var.get(), len(self.subcategories), "подкатегории")
             if sub_idx is None:
+                log_final = False
                 return
 
             export_dir = self.export_path_var.get().strip()
             if not export_dir:
                 self.log("Укажите путь экспорта.")
+                log_final = False
                 return
             if not os.path.isdir(export_dir):
                 self.log("Путь экспорта не найден. Выберите существующую папку.")
+                log_final = False
                 return
 
             selected_main_cat_name = self.main_categories[main_idx]
@@ -398,9 +409,12 @@ class ScraperApp:
             if not safe_name:
                 safe_name = "export"
             filename = os.path.join(export_dir, f"parsed_{safe_name}.csv")
+            json_filename = os.path.join(export_dir, f"parsed_{safe_name}.json")
 
             if os.path.exists(filename):
                 os.remove(filename)
+            if os.path.exists(json_filename):
+                os.remove(json_filename)
 
             self.log(f"Парсинг: {selected_sub['name']}")
             self.log(f"Данные будут сохраняться в: {filename} (после каждой страницы)")
@@ -465,6 +479,17 @@ class ScraperApp:
                     header_mode = not os.path.exists(filename)
                     df.to_csv(filename, mode="a", index=False, header=header_mode, encoding="utf-8-sig", sep=";")
 
+                    existing = []
+                    if os.path.exists(json_filename):
+                        try:
+                            with open(json_filename, "r", encoding="utf-8") as f:
+                                existing = json.load(f)
+                        except Exception:
+                            existing = []
+                    existing.extend(items)
+                    with open(json_filename, "w", encoding="utf-8") as f:
+                        json.dump(existing, f, ensure_ascii=False)
+
                     total_items_collected += len(items)
                     self.log(f"Собрано {len(items)} (Всего: {total_items_collected}). Сохранено в файл.")
 
@@ -479,12 +504,20 @@ class ScraperApp:
                 except Exception:
                     break
 
+            if self.stop_requested:
+                self.log("Остановлено пользователем.")
+                final_message = "Работа остановлена."
             self.log(f"ГОТОВО! Весь процесс завершен. Файл: {filename}")
+            self.log(f"JSON: {json_filename}")
         except Exception as exc:
             self.log(f"Произошла ошибка: {exc}")
             self.log("Не волнуйтесь, всё что успели собрать до этого момента - уже в файле CSV.")
         finally:
-            self.log("Работа завершена.")
+            if self.stop_requested:
+                self._close_driver()
+                self.log("Браузер закрыт.")
+            if log_final:
+                self.log(final_message)
             self.running = False
 
     def _parse_index(self, value, max_len, label):
@@ -572,6 +605,14 @@ class ScraperApp:
 
         self.subcategories = available_subcats
         self.subcategories_for_main = main_idx
+
+    def _close_driver(self):
+        try:
+            if self.driver:
+                self.driver.quit()
+        except Exception:
+            pass
+        self.driver = None
 
     def _get_total_pages(self):
         try:
