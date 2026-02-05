@@ -31,16 +31,11 @@ def translate_text(text, target_lang="ru"):
 
 
 def smooth_scroll(driver):
-    last_height = 0
     current_height = driver.execute_script("return document.body.scrollHeight")
-
-    while last_height != current_height:
-        last_height = current_height
-        for i in range(0, current_height, 200):
-            driver.execute_script(f"window.scrollTo(0, {i});")
-            time.sleep(0.02)
-        time.sleep(0.4)
-        current_height = driver.execute_script("return document.body.scrollHeight")
+    for i in range(0, current_height, 200):
+        driver.execute_script(f"window.scrollTo(0, {i});")
+        time.sleep(0.02)
+    time.sleep(0.4)
 
 
 def scrape_items_on_page(driver, log):
