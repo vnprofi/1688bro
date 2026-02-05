@@ -30,25 +30,28 @@ def translate_text(text, target_lang="ru"):
         return text
 
 
-def smooth_scroll(driver, max_wait=15):
-    start = time.time()
-    last_height = 0
-    stable_passes = 0
+def smooth_scroll(driver):
+    scroll_position = 0
+    last_count = 0
+    stable_checks = 0
 
-    while time.time() - start < max_wait:
-        current_height = driver.execute_script("return document.body.scrollHeight")
-        if current_height == last_height:
-            stable_passes += 1
-        else:
-            stable_passes = 0
-        last_height = current_height
+    while stable_checks < 2:
+        scroll_position += 500
+        driver.execute_script(f"window.scrollTo(0, {scroll_position});")
+        time.sleep(0.4)
 
-        for i in range(0, current_height, 250):
-            driver.execute_script(f"window.scrollTo(0, {i});")
-            time.sleep(0.015)
-        time.sleep(0.25)
+        cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
+        current_count = len(cards)
 
-        if stable_passes >= 2:
+        if current_count >= 55:
+            if current_count == last_count:
+                stable_checks += 1
+            else:
+                stable_checks = 0
+            last_count = current_count
+
+        page_height = driver.execute_script("return document.body.scrollHeight")
+        if scroll_position >= page_height:
             break
 
 
@@ -645,9 +648,11 @@ class ScraperApp:
         if current_page >= max_pages:
             self.log("Это последняя страница.")
             return False
-        target_page = current_page + 1
-        if self._go_to_page(target_page):
-            return True
+        try:
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(0.5)
+        except Exception:
+            pass
 
         next_btns = self.driver.find_elements(By.CSS_SELECTOR, ".fui-arrow.fui-next")
         if not next_btns:
@@ -660,6 +665,7 @@ class ScraperApp:
 
         prev_page = self._get_current_page()
         self.driver.execute_script("arguments[0].click();", btn)
+        time.sleep(1.5)
 
         if not self._wait_for_page_change(prev_page):
             self.log("Переход страницы занимает слишком долго. Проверьте капчу.")
