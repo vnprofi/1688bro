@@ -1,4 +1,4 @@
-import os
+﻿import os
 import queue
 import threading
 import time
@@ -56,7 +56,7 @@ def scrape_items_on_page(driver, log):
     if not cards:
         return []
 
-    log(f"  -> Найдено карточек: {len(cards)}")
+    log(f"  -> РќР°Р№РґРµРЅРѕ РєР°СЂС‚РѕС‡РµРє: {len(cards)}")
 
     items_data = []
 
@@ -152,46 +152,115 @@ class ScraperApp:
         self.root.after(100, self._process_log_queue)
 
     def _build_ui(self):
-        main_frame = ttk.Frame(self.root, padding=12)
+        colors = {
+            "bg": "#f5f2ee",
+            "card": "#ffffff",
+            "border": "#d6cfc8",
+            "text": "#2a2a2a",
+            "muted": "#6a625c",
+            "accent": "#2f6f6d",
+            "accent_dark": "#255b59",
+            "danger": "#c2413b",
+            "danger_dark": "#a3342f",
+            "field": "#ffffff",
+        }
+
+        self.root.configure(bg=colors["bg"])
+        self.root.option_add("*Font", "Segoe UI 10")
+        self.root.option_add("*Foreground", colors["text"])
+
+        style = ttk.Style(self.root)
+        if "clam" in style.theme_names():
+            style.theme_use("clam")
+
+        style.configure("App.TFrame", background=colors["bg"])
+        style.configure("Card.TFrame", background=colors["card"], relief="solid", borderwidth=1)
+        style.configure("Header.TLabel", background=colors["bg"], foreground=colors["text"], font=("Segoe UI Semibold", 16))
+        style.configure("Sub.TLabel", background=colors["bg"], foreground=colors["muted"], font=("Segoe UI", 10))
+        style.configure("TLabel", background=colors["bg"], foreground=colors["text"])
+        style.configure("Card.TLabel", background=colors["card"], foreground=colors["text"])
+        style.configure("TLabelframe", background=colors["bg"], borderwidth=0)
+        style.configure("TLabelframe.Label", background=colors["bg"], foreground=colors["muted"], font=("Segoe UI Semibold", 10))
+        style.configure("TEntry", fieldbackground=colors["field"], foreground=colors["text"])
+        style.configure("Primary.TButton", background=colors["accent"], foreground="white", padding=(14, 6))
+        style.configure("Ghost.TButton", background=colors["card"], foreground=colors["text"], padding=(14, 6))
+        style.configure("Danger.TButton", background=colors["danger"], foreground="white", padding=(10, 5))
+        style.map(
+            "Primary.TButton",
+            background=[("active", colors["accent_dark"])],
+            foreground=[("disabled", "#e8e5e1")],
+        )
+        style.map(
+            "Ghost.TButton",
+            background=[("active", "#efebe7")],
+        )
+        style.map(
+            "Danger.TButton",
+            background=[("active", colors["danger_dark"])],
+        )
+
+        main_frame = ttk.Frame(self.root, padding=16, style="App.TFrame")
         main_frame.grid(row=0, column=0, sticky="nsew")
 
-        ttk.Label(main_frame, text="1688_soft", font=("Arial", 14, "bold")).grid(
-            row=0, column=0, columnspan=3, pady=(0, 8)
+        header = ttk.Frame(main_frame, style="App.TFrame")
+        header.grid(row=0, column=0, sticky="ew")
+        header.columnconfigure(0, weight=1)
+        ttk.Label(header, text="1688_soft", style="Header.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(header, text="Парсер товаров 1688", style="Sub.TLabel").grid(row=1, column=0, sticky="w", pady=(2, 0))
+
+        actions = ttk.Frame(main_frame, style="App.TFrame")
+        actions.grid(row=1, column=0, sticky="ew", pady=(10, 8))
+        actions.columnconfigure(0, weight=1)
+        actions.columnconfigure(1, weight=1)
+        ttk.Button(actions, text="Открыть браузер", style="Ghost.TButton", command=self.start_browser).grid(
+            row=0, column=0, sticky="ew", padx=(0, 8)
+        )
+        ttk.Button(actions, text="Начать парсинг", style="Primary.TButton", command=self.start_parsing).grid(
+            row=0, column=1, sticky="ew"
         )
 
-        ttk.Button(main_frame, text="Открыть браузер", command=self.start_browser).grid(
-            row=1, column=0, columnspan=2, sticky="ew"
-        )
-        ttk.Button(main_frame, text="Начать парсинг", command=self.start_parsing).grid(
-            row=1, column=2, sticky="ew"
-        )
+        params = ttk.LabelFrame(main_frame, text="Параметры", padding=12)
+        params.grid(row=2, column=0, sticky="ew")
+        params.columnconfigure(1, weight=1)
 
-        ttk.Label(main_frame, text="Номер главной категории:").grid(row=2, column=0, sticky="w", pady=(8, 2))
+        ttk.Label(params, text="Номер главной категории:", style="Card.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 6))
         self.main_cat_var = tk.StringVar()
-        ttk.Entry(main_frame, textvariable=self.main_cat_var, width=10).grid(row=2, column=1, sticky="w", pady=(8, 2))
+        ttk.Entry(params, textvariable=self.main_cat_var, width=10).grid(row=0, column=1, sticky="w", pady=(0, 6))
 
-        ttk.Label(main_frame, text="Номер подкатегории:").grid(row=3, column=0, sticky="w", pady=(0, 8))
+        ttk.Label(params, text="Номер подкатегории:", style="Card.TLabel").grid(row=1, column=0, sticky="w", pady=(0, 6))
         self.sub_cat_var = tk.StringVar()
-        ttk.Entry(main_frame, textvariable=self.sub_cat_var, width=10).grid(row=3, column=1, sticky="w", pady=(0, 8))
+        ttk.Entry(params, textvariable=self.sub_cat_var, width=10).grid(row=1, column=1, sticky="w", pady=(0, 6))
 
-        ttk.Label(main_frame, text="Путь экспорта:").grid(row=4, column=0, sticky="w")
+        ttk.Label(params, text="Путь экспорта:", style="Card.TLabel").grid(row=2, column=0, sticky="w")
         self.export_path_var = tk.StringVar(value=os.getcwd())
-        ttk.Entry(main_frame, textvariable=self.export_path_var, width=40).grid(row=4, column=1, columnspan=2, sticky="ew")
-        ttk.Button(main_frame, text="Выбрать", command=self.choose_export_path).grid(row=5, column=1, sticky="w", pady=(4, 8))
+        ttk.Entry(params, textvariable=self.export_path_var, width=44).grid(row=2, column=1, sticky="ew")
 
-        contact_btn = tk.Button(
-            main_frame,
-            text="Связь: @EcommerceGr",
-            bg="#d9534f",
-            fg="white",
-            activebackground="#c9302c",
-            command=self.open_contact,
+        path_actions = ttk.Frame(params, style="App.TFrame")
+        path_actions.grid(row=3, column=1, sticky="e", pady=(8, 0))
+        ttk.Button(path_actions, text="Выбрать папку", style="Ghost.TButton", command=self.choose_export_path).grid(
+            row=0, column=0, sticky="e"
         )
-        contact_btn.grid(row=5, column=2, sticky="e", pady=(4, 8))
+        ttk.Button(path_actions, text="Связь: @EcommerceGr", style="Danger.TButton", command=self.open_contact).grid(
+            row=0, column=1, sticky="e", padx=(8, 0)
+        )
 
-        ttk.Label(main_frame, text="Логирование:").grid(row=6, column=0, sticky="w")
-        self.log_text = tk.Text(main_frame, height=18, width=70, state="disabled")
-        self.log_text.grid(row=7, column=0, columnspan=3, pady=(4, 0))
+        ttk.Separator(main_frame, orient="horizontal").grid(row=3, column=0, sticky="ew", pady=(12, 8))
+
+        ttk.Label(main_frame, text="Логирование", style="Sub.TLabel").grid(row=4, column=0, sticky="w")
+        self.log_text = tk.Text(
+            main_frame,
+            height=18,
+            width=72,
+            state="disabled",
+            bg=colors["card"],
+            fg=colors["text"],
+            relief="solid",
+            borderwidth=1,
+            highlightthickness=1,
+            highlightbackground=colors["border"],
+            highlightcolor=colors["border"],
+        )
+        self.log_text.grid(row=5, column=0, sticky="ew", pady=(6, 0))
 
     def log(self, message):
         timestamp = time.strftime("%H:%M:%S")
@@ -216,10 +285,10 @@ class ScraperApp:
 
     def start_browser(self):
         if self.running:
-            self.log("Процесс уже выполняется.")
+            self.log("РџСЂРѕС†РµСЃСЃ СѓР¶Рµ РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ.")
             return
         if self.driver:
-            self.log("Браузер уже открыт.")
+            self.log("Р‘СЂР°СѓР·РµСЂ СѓР¶Рµ РѕС‚РєСЂС‹С‚.")
             return
         self.running = True
         threading.Thread(target=self._start_browser_worker, daemon=True).start()
@@ -233,23 +302,23 @@ class ScraperApp:
             options.add_experimental_option("useAutomationExtension", False)
 
             self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-            self.log("Открываем https://alibaba.cn ...")
+            self.log("РћС‚РєСЂС‹РІР°РµРј https://alibaba.cn ...")
             self.driver.get("https://alibaba.cn")
-            self.log("ЭТАП 1: ВХОД")
-            self.log("1. Войдите в аккаунт.")
-            self.log("2. После входа нажмите 'Начать парсинг'.")
+            self.log("Р­РўРђРџ 1: Р’РҐРћР”")
+            self.log("1. Р’РѕР№РґРёС‚Рµ РІ Р°РєРєР°СѓРЅС‚.")
+            self.log("2. РџРѕСЃР»Рµ РІС…РѕРґР° РЅР°Р¶РјРёС‚Рµ 'РќР°С‡Р°С‚СЊ РїР°СЂСЃРёРЅРі'.")
         except Exception as exc:
-            self.log(f"Ошибка запуска браузера: {exc}")
+            self.log(f"РћС€РёР±РєР° Р·Р°РїСѓСЃРєР° Р±СЂР°СѓР·РµСЂР°: {exc}")
             self.driver = None
         finally:
             self.running = False
 
     def start_parsing(self):
         if self.running:
-            self.log("Процесс уже выполняется.")
+            self.log("РџСЂРѕС†РµСЃСЃ СѓР¶Рµ РІС‹РїРѕР»РЅСЏРµС‚СЃСЏ.")
             return
         if not self.driver:
-            messagebox.showwarning("1688_soft", "Сначала откройте браузер.")
+            messagebox.showwarning("1688_soft", "РЎРЅР°С‡Р°Р»Р° РѕС‚РєСЂРѕР№С‚Рµ Р±СЂР°СѓР·РµСЂ.")
             return
         self.running = True
         threading.Thread(target=self._parse_worker, daemon=True).start()
@@ -258,28 +327,28 @@ class ScraperApp:
         try:
             if not self.main_categories:
                 self._scan_main_categories()
-                self.log("Введите номер главной категории и нажмите 'Начать парсинг' еще раз.")
+                self.log("Р’РІРµРґРёС‚Рµ РЅРѕРјРµСЂ РіР»Р°РІРЅРѕР№ РєР°С‚РµРіРѕСЂРёРё Рё РЅР°Р¶РјРёС‚Рµ 'РќР°С‡Р°С‚СЊ РїР°СЂСЃРёРЅРі' РµС‰Рµ СЂР°Р·.")
                 return
 
-            main_idx = self._parse_index(self.main_cat_var.get(), len(self.main_categories), "главной категории")
+            main_idx = self._parse_index(self.main_cat_var.get(), len(self.main_categories), "РіР»Р°РІРЅРѕР№ РєР°С‚РµРіРѕСЂРёРё")
             if main_idx is None:
                 return
 
             if self.subcategories_for_main != main_idx or not self.subcategories:
                 self._scan_subcategories(main_idx)
-                self.log("Введите номер подкатегории и нажмите 'Начать парсинг' еще раз.")
+                self.log("Р’РІРµРґРёС‚Рµ РЅРѕРјРµСЂ РїРѕРґРєР°С‚РµРіРѕСЂРёРё Рё РЅР°Р¶РјРёС‚Рµ 'РќР°С‡Р°С‚СЊ РїР°СЂСЃРёРЅРі' РµС‰Рµ СЂР°Р·.")
                 return
 
-            sub_idx = self._parse_index(self.sub_cat_var.get(), len(self.subcategories), "подкатегории")
+            sub_idx = self._parse_index(self.sub_cat_var.get(), len(self.subcategories), "РїРѕРґРєР°С‚РµРіРѕСЂРёРё")
             if sub_idx is None:
                 return
 
             export_dir = self.export_path_var.get().strip()
             if not export_dir:
-                self.log("Укажите путь экспорта.")
+                self.log("РЈРєР°Р¶РёС‚Рµ РїСѓС‚СЊ СЌРєСЃРїРѕСЂС‚Р°.")
                 return
             if not os.path.isdir(export_dir):
-                self.log("Путь экспорта не найден. Выберите существующую папку.")
+                self.log("РџСѓС‚СЊ СЌРєСЃРїРѕСЂС‚Р° РЅРµ РЅР°Р№РґРµРЅ. Р’С‹Р±РµСЂРёС‚Рµ СЃСѓС‰РµСЃС‚РІСѓСЋС‰СѓСЋ РїР°РїРєСѓ.")
                 return
 
             selected_main_cat_name = self.main_categories[main_idx]
@@ -293,8 +362,8 @@ class ScraperApp:
             if os.path.exists(filename):
                 os.remove(filename)
 
-            self.log(f"Парсинг: {selected_sub['name']}")
-            self.log(f"Данные будут сохраняться в: {filename} (после каждой страницы)")
+            self.log(f"РџР°СЂСЃРёРЅРі: {selected_sub['name']}")
+            self.log(f"Р”Р°РЅРЅС‹Рµ Р±СѓРґСѓС‚ СЃРѕС…СЂР°РЅСЏС‚СЊСЃСЏ РІ: {filename} (РїРѕСЃР»Рµ РєР°Р¶РґРѕР№ СЃС‚СЂР°РЅРёС†С‹)")
 
             self.driver.get(selected_sub["url"])
             try:
@@ -324,13 +393,13 @@ class ScraperApp:
             ]
 
             while page_num <= MAX_PAGES:
-                self.log(f"--- Страница {page_num} ---")
+                self.log(f"--- РЎС‚СЂР°РЅРёС†Р° {page_num} ---")
 
                 items = scrape_items_on_page(self.driver, self.log)
 
                 if len(items) == 0:
-                    self.log("!!! ПУСТО. Возможно КАПЧА !!!")
-                    messagebox.showinfo("1688_soft", "Пройдите капчу в браузере и нажмите OK.")
+                    self.log("!!! РџРЈРЎРўРћ. Р’РѕР·РјРѕР¶РЅРѕ РљРђРџР§Рђ !!!")
+                    messagebox.showinfo("1688_soft", "РџСЂРѕР№РґРёС‚Рµ РєР°РїС‡Сѓ РІ Р±СЂР°СѓР·РµСЂРµ Рё РЅР°Р¶РјРёС‚Рµ OK.")
                     items = scrape_items_on_page(self.driver, self.log)
                     if len(items) == 0:
                         break
@@ -348,7 +417,7 @@ class ScraperApp:
                     df.to_csv(filename, mode="a", index=False, header=header_mode, encoding="utf-8-sig", sep=";")
 
                     total_items_collected += len(items)
-                    self.log(f"Собрано {len(items)} (Всего: {total_items_collected}). Сохранено в файл.")
+                    self.log(f"РЎРѕР±СЂР°РЅРѕ {len(items)} (Р’СЃРµРіРѕ: {total_items_collected}). РЎРѕС…СЂР°РЅРµРЅРѕ РІ С„Р°Р№Р».")
 
                 try:
                     next_btns = self.driver.find_elements(By.CSS_SELECTOR, ".fui-arrow.fui-next")
@@ -357,7 +426,7 @@ class ScraperApp:
 
                     btn = next_btns[0]
                     if "disabled" in btn.get_attribute("class") or "fui-prev-disabled" in btn.get_attribute("class"):
-                        self.log("Это последняя страница.")
+                        self.log("Р­С‚Рѕ РїРѕСЃР»РµРґРЅСЏСЏ СЃС‚СЂР°РЅРёС†Р°.")
                         break
 
                     self.driver.execute_script("arguments[0].click();", btn)
@@ -372,30 +441,30 @@ class ScraperApp:
                 except Exception:
                     break
 
-            self.log(f"ГОТОВО! Весь процесс завершен. Файл: {filename}")
+            self.log(f"Р“РћРўРћР’Рћ! Р’РµСЃСЊ РїСЂРѕС†РµСЃСЃ Р·Р°РІРµСЂС€РµРЅ. Р¤Р°Р№Р»: {filename}")
         except Exception as exc:
-            self.log(f"Произошла ошибка: {exc}")
-            self.log("Не волнуйтесь, всё что успели собрать до этого момента - уже в файле CSV.")
+            self.log(f"РџСЂРѕРёР·РѕС€Р»Р° РѕС€РёР±РєР°: {exc}")
+            self.log("РќРµ РІРѕР»РЅСѓР№С‚РµСЃСЊ, РІСЃС‘ С‡С‚Рѕ СѓСЃРїРµР»Рё СЃРѕР±СЂР°С‚СЊ РґРѕ СЌС‚РѕРіРѕ РјРѕРјРµРЅС‚Р° - СѓР¶Рµ РІ С„Р°Р№Р»Рµ CSV.")
         finally:
-            self.log("Работа завершена.")
+            self.log("Р Р°Р±РѕС‚Р° Р·Р°РІРµСЂС€РµРЅР°.")
             self.running = False
 
     def _parse_index(self, value, max_len, label):
         try:
             idx = int(value) - 1
         except ValueError:
-            self.log(f"Введите корректный номер для {label}.")
+            self.log(f"Р’РІРµРґРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ РЅРѕРјРµСЂ РґР»СЏ {label}.")
             return None
         if idx < 0 or idx >= max_len:
-            self.log(f"Номер {label} вне диапазона (1-{max_len}).")
+            self.log(f"РќРѕРјРµСЂ {label} РІРЅРµ РґРёР°РїР°Р·РѕРЅР° (1-{max_len}).")
             return None
         return idx
 
     def _scan_main_categories(self):
-        self.log("Сканируем категории...")
+        self.log("РЎРєР°РЅРёСЂСѓРµРј РєР°С‚РµРіРѕСЂРёРё...")
         main_cat_elems = self.driver.find_elements(By.CSS_SELECTOR, "li.lv1Item--O30i9KsN")
         if not main_cat_elems:
-            self.log("Категории не найдены. Убедитесь, что вы вошли и страница загрузилась.")
+            self.log("РљР°С‚РµРіРѕСЂРёРё РЅРµ РЅР°Р№РґРµРЅС‹. РЈР±РµРґРёС‚РµСЃСЊ, С‡С‚Рѕ РІС‹ РІРѕС€Р»Рё Рё СЃС‚СЂР°РЅРёС†Р° Р·Р°РіСЂСѓР·РёР»Р°СЃСЊ.")
             return
 
         main_cats_list = []
@@ -420,10 +489,10 @@ class ScraperApp:
         self.main_categories = main_cats_list
 
     def _scan_subcategories(self, main_idx):
-        self.log("Получаем подкатегории...")
+        self.log("РџРѕР»СѓС‡Р°РµРј РїРѕРґРєР°С‚РµРіРѕСЂРёРё...")
         main_cat_elems = self.driver.find_elements(By.CSS_SELECTOR, "li.lv1Item--O30i9KsN")
         if main_idx >= len(main_cat_elems):
-            self.log("Главная категория не найдена. Обновите страницу и попробуйте снова.")
+            self.log("Р“Р»Р°РІРЅР°СЏ РєР°С‚РµРіРѕСЂРёСЏ РЅРµ РЅР°Р№РґРµРЅР°. РћР±РЅРѕРІРёС‚Рµ СЃС‚СЂР°РЅРёС†Сѓ Рё РїРѕРїСЂРѕР±СѓР№С‚Рµ СЃРЅРѕРІР°.")
             return
 
         target_li = main_cat_elems[main_idx]
@@ -439,7 +508,7 @@ class ScraperApp:
             )
             sub_rows = popup_ul.find_elements(By.TAG_NAME, "li")
         except Exception:
-            self.log("Подкатегории не найдены. Попробуйте еще раз.")
+            self.log("РџРѕРґРєР°С‚РµРіРѕСЂРёРё РЅРµ РЅР°Р№РґРµРЅС‹. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·.")
             return
 
         available_subcats = []
@@ -448,7 +517,7 @@ class ScraperApp:
             try:
                 group_name = row.find_element(By.CLASS_NAME, "cTitle--Md3f91iK").get_attribute("textContent").strip()
             except Exception:
-                group_name = "Общее"
+                group_name = "РћР±С‰РµРµ"
 
             try:
                 box = row.find_element(By.CLASS_NAME, "cBox--sueyS7qB")
@@ -469,12 +538,11 @@ class ScraperApp:
 
 def main():
     root = tk.Tk()
-    style = ttk.Style(root)
-    if "clam" in style.theme_names():
-        style.theme_use("clam")
     app = ScraperApp(root)
     root.mainloop()
 
 
 if __name__ == "__main__":
     main()
+
+
