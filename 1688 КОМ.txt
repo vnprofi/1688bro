@@ -1,0 +1,316 @@
+import time
+import random
+import os
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
+from deep_translator import GoogleTranslator
+
+# --- НАСТРОЙКИ ---
+MAX_PAGES = 34
+
+
+# --- ПЕРЕВОД ---
+def translate_text(text, target_lang='ru'):
+    try:
+        if not text: return ""
+        return GoogleTranslator(source='auto', target=target_lang).translate(text)
+    except:
+        return text
+
+
+# --- ПЛАВНЫЙ СКРОЛЛ ---
+def smooth_scroll(driver):
+    last_height = 0
+    current_height = driver.execute_script("return document.body.scrollHeight")
+
+    while last_height != current_height:
+        last_height = current_height
+        for i in range(0, current_height, 200):
+            driver.execute_script(f"window.scrollTo(0, {i});")
+            time.sleep(0.02)
+        time.sleep(0.4)
+        current_height = driver.execute_script("return document.body.scrollHeight")
+
+
+# --- СБОР ТОВАРОВ (Расширенный) ---
+def scrape_items_on_page(driver):
+    smooth_scroll(driver)
+    time.sleep(0.3)
+
+    cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
+
+    if len(cards) < 40:
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(0.5)
+        smooth_scroll(driver)
+        time.sleep(0.3)
+        cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
+
+    if not cards: return []
+
+    print(f"  -> Найдено карточек: {len(cards)}")
+
+    items_data = []
+
+    for card in cards:
+        try:
+            # 1. Ссылка
+            link = card.get_attribute("href")
+
+            # 2. Название
+            try:
+                title_elem = card.find_element(By.CLASS_NAME, "offer-title")
+                title_cn = title_elem.get_attribute('textContent').strip()
+            except:
+                title_cn = card.text.split('\n')[0]
+
+            # 3. Цена
+            try:
+                price_elem = card.find_element(By.CLASS_NAME, "price-wrap")
+                price = price_elem.text.replace('\n', '').strip()
+            except:
+                price = "0"
+
+            # 4. Картинка
+            try:
+                img_elem = card.find_element(By.CSS_SELECTOR, "img")
+                img_src = img_elem.get_attribute("src")
+                if not img_src: img_src = img_elem.get_attribute("data-src")
+                if not img_src: img_src = img_elem.get_attribute("data-original")
+            except:
+                img_src = ""
+
+            # --- НОВЫЕ ПОЛЯ ---
+
+            # 5. MOQ (Минимальный заказ)
+            try:
+                moq = card.find_element(By.CLASS_NAME, "overseas-begin-quantity-wrap").text.strip()
+            except:
+                moq = ""
+
+            # 6. Продажи (Sales amount)
+            try:
+                sales = card.find_element(By.CLASS_NAME, "sale-amount-wrap").text.strip()
+            except:
+                sales = ""
+
+            # 7. Рейтинг (Звезды)
+            try:
+                rating = card.find_element(By.CLASS_NAME, "star-level-text").text.strip()
+            except:
+                rating = ""
+
+            # 8. Промо-теги (Скидки)
+            try:
+                tags = card.find_elements(By.CLASS_NAME, "promotion-tags")
+                promo_text = ", ".join([t.text for t in tags])
+            except:
+                promo_text = ""
+
+            # 9. Повторная покупка (Return rate)
+            try:
+                return_rate = card.find_element(By.CLASS_NAME, "overseas-return-rate-wrap").text.strip()
+            except:
+                return_rate = ""
+
+            # Перевод названия
+            title_ru = translate_text(title_cn)
+
+            items_data.append({
+                'Title_CN': title_cn,
+                'Title_RU': title_ru,
+                'Price': price,
+                'MOQ': moq,  # Новое
+                'Sales': sales,  # Новое
+                'Rating': rating,  # Новое
+                'Return_Rate': return_rate,  # Новое
+                'Promo': promo_text,  # Новое
+                'Link': link,
+                'Image': img_src
+            })
+        except:
+            continue
+
+    return items_data
+
+
+def main():
+    options = webdriver.ChromeOptions()
+    options.add_argument('--start-maximized')
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    options.add_experimental_option('useAutomationExtension', False)
+
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+    try:
+        print("Открываем https://alibaba.cn ...")
+        driver.get("https://alibaba.cn")
+
+        print("\n" + "#" * 40)
+        print("ЭТАП 1: ВХОД")
+        print("1. Войдите в аккаунт.")
+        print("2. Нажмите ENTER в консоли.")
+        print("#" * 40)
+        input("Жду Enter...")
+
+        # --- ВЫБОР КАТЕГОРИИ ---
+        print("\nСканируем категории...")
+        main_cat_elems = driver.find_elements(By.CSS_SELECTOR, "li.lv1Item--O30i9KsN")
+        if not main_cat_elems: return
+
+        main_cats_list = []
+        for i, el in enumerate(main_cat_elems):
+            try:
+                links = el.find_elements(By.TAG_NAME, "a")
+                clean_texts = [l.get_attribute('textContent').strip() for l in links
+                               if l.get_attribute('textContent').strip() and "f-14" in l.get_attribute("class")]
+                if not clean_texts: clean_texts = [l.get_attribute('textContent').strip() for l in links if
+                                                   l.get_attribute('textContent').strip()][:3]
+                name = " / ".join(clean_texts)
+                main_cats_list.append(name)
+                print(f"{i + 1}. {name}")
+            except:
+                main_cats_list.append("Unknown")
+
+        choice_idx = int(input(f"\nНомер ГЛАВНОЙ категории (1-{len(main_cats_list)}): ")) - 1
+        selected_main_cat_name = main_cats_list[choice_idx]
+        target_li = main_cat_elems[choice_idx]
+
+        # --- ПОДКАТЕГОРИИ ---
+        print("\nПолучаем подкатегории...")
+        driver.execute_script(
+            "var ev = document.createEvent('MouseEvents'); ev.initEvent('mouseenter', true, false); arguments[0].dispatchEvent(ev);",
+            target_li)
+        time.sleep(1.5)
+
+        try:
+            popup_ul = WebDriverWait(target_li, 5).until(
+                EC.presence_of_element_located((By.CLASS_NAME, "cate_content--TUOLAWjz")))
+            sub_rows = popup_ul.find_elements(By.TAG_NAME, "li")
+        except:
+            return
+
+        available_subcats = []
+        count = 1
+        for row in sub_rows:
+            try:
+                group_name = row.find_element(By.CLASS_NAME, "cTitle--Md3f91iK").get_attribute('textContent').strip()
+            except:
+                group_name = "Общее"
+
+            try:
+                box = row.find_element(By.CLASS_NAME, "cBox--sueyS7qB")
+                links = box.find_elements(By.TAG_NAME, "a")
+                for link in links:
+                    item_name = link.get_attribute('textContent').strip()
+                    item_url = link.get_attribute('href')
+                    if item_name and item_url:
+                        available_subcats.append({'group': group_name, 'name': item_name, 'url': item_url})
+                        print(f"{count}. [{group_name}] {item_name}")
+                        count += 1
+            except:
+                continue
+
+        sub_choice = int(input(f"\nНомер ПОДКАТЕГОРИИ (1-{len(available_subcats)}): ")) - 1
+        selected_sub = available_subcats[sub_choice]
+
+        # --- ФОРМИРУЕМ ИМЯ ФАЙЛА ЗАРАНЕЕ ---
+        safe_name = "".join([c for c in selected_sub['name'] if c.isalpha() or c.isdigit()]).rstrip()
+        filename = f"parsed_{safe_name}.csv"
+
+        # Удаляем старый файл, если он был, чтобы начать с чистого листа
+        if os.path.exists(filename):
+            os.remove(filename)
+
+        print(f"\nПарсинг: {selected_sub['name']}")
+        print(f"Данные будут сохраняться в: {filename} (после каждой страницы)")
+
+        driver.get(selected_sub['url'])
+        try:
+            WebDriverWait(driver, 5).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")))
+        except:
+            time.sleep(1)
+
+        # --- ЦИКЛ ПО СТРАНИЦАМ ---
+        page_num = 1
+        total_items_collected = 0
+
+        # Определяем порядок столбцов для CSV
+        cols = ['Main_Category', 'Sub_Group', 'Sub_Category', 'Title_CN', 'Title_RU', 'Price', 'MOQ', 'Sales', 'Rating',
+                'Return_Rate', 'Promo', 'Link', 'Image']
+
+        while page_num <= MAX_PAGES:
+            print(f"\n--- Страница {page_num} ---")
+
+            # Сбор
+            items = scrape_items_on_page(driver)
+
+            # Капча?
+            if len(items) == 0:
+                print("\n!!! ПУСТО. Возможно КАПЧА !!!")
+                input("Пройдите и нажмите Enter...")
+                items = scrape_items_on_page(driver)
+                if len(items) == 0: break
+
+            # Добавляем общие данные
+            for item in items:
+                item['Main_Category'] = selected_main_cat_name
+                item['Sub_Group'] = selected_sub['group']
+                item['Sub_Category'] = selected_sub['name']
+
+            # --- БЕЗОПАСНОЕ СОХРАНЕНИЕ (APPEND) ---
+            if items:
+                df = pd.DataFrame(items)
+                # reindex добавляет недостающие столбцы пустыми, если вдруг их нет
+                df = df.reindex(columns=cols)
+
+                # Если файл не существует, пишем заголовок (header=True)
+                # Если существует, дописываем без заголовка (header=False)
+                header_mode = not os.path.exists(filename)
+
+                df.to_csv(filename, mode='a', index=False, header=header_mode, encoding='utf-8-sig', sep=';')
+
+                total_items_collected += len(items)
+                print(f"Собрано {len(items)} (Всего: {total_items_collected}). Сохранено в файл.")
+
+            # Переход
+            try:
+                next_btns = driver.find_elements(By.CSS_SELECTOR, ".fui-arrow.fui-next")
+                if not next_btns: break
+
+                btn = next_btns[0]
+                if "disabled" in btn.get_attribute("class") or "fui-prev-disabled" in btn.get_attribute("class"):
+                    print("Это последняя страница.")
+                    break
+
+                driver.execute_script("arguments[0].click();", btn)
+                page_num += 1
+
+                # Ждём появления карточек на новой странице
+                try:
+                    WebDriverWait(driver, 3).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")))
+                except:
+                    time.sleep(0.5)
+            except Exception:
+                break
+
+        print(f"\nГОТОВО! Весь процесс завершен. Файл: {filename}")
+
+    except Exception as e:
+        print(f"Произошла ошибка: {e}")
+        print("Не волнуйтесь, всё что успели собрать до этого момента - уже в файле CSV.")
+
+    finally:
+        print("Работа завершена.")
+
+
+if __name__ == "__main__":
+    main()
