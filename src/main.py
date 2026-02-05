@@ -17,6 +17,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from webdriver_manager.chrome import ChromeDriverManager
 
 MAX_PAGES = 34
+PAGE_CHANGE_TIMEOUT = 20
 
 
 def translate_text(text, target_lang="ru"):
@@ -390,6 +391,8 @@ class ScraperApp:
 
             page_num = 1
             max_pages = self._get_total_pages() or MAX_PAGES
+            if max_pages < 1:
+                max_pages = MAX_PAGES
             total_items_collected = 0
 
             cols = [
@@ -414,14 +417,17 @@ class ScraperApp:
                     break
                 self.log(f"--- Страница {page_num} ---")
 
-                items = scrape_items_on_page(self.driver, self.log)
-
-                if len(items) == 0:
-                    self.log("!!! ПУСТО. Возможно КАПЧА !!!")
-                    messagebox.showinfo("1688_soft", "Пройдите капчу в браузере и нажмите OK.")
+                items = []
+                for attempt in range(2):
                     items = scrape_items_on_page(self.driver, self.log)
-                    if len(items) == 0:
+                    if items:
                         break
+                    if attempt == 0:
+                        self.log("!!! ПУСТО. Возможно КАПЧА !!!")
+                        messagebox.showinfo("1688_soft", "Пройдите капчу в браузере и нажмите OK.")
+                if len(items) == 0:
+                    self.log("Данные не получены после капчи. Останавливаемся.")
+                    break
 
                 for item in items:
                     item["Main_Category"] = selected_main_cat_name
@@ -546,7 +552,8 @@ class ScraperApp:
     def _get_total_pages(self):
         try:
             num_elem = self.driver.find_element(By.CSS_SELECTOR, ".fui-paging-total .fui-paging-num")
-            total = int(num_elem.text.strip())
+            digits = "".join(ch for ch in num_elem.text.strip() if ch.isdigit())
+            total = int(digits) if digits else 0
             if total > 0:
                 return min(total, MAX_PAGES)
         except Exception:
@@ -564,6 +571,10 @@ class ScraperApp:
         if current_page >= max_pages:
             self.log("Это последняя страница.")
             return False
+        target_page = current_page + 1
+        if self._go_to_page(target_page):
+            return True
+
         next_btns = self.driver.find_elements(By.CSS_SELECTOR, ".fui-arrow.fui-next")
         if not next_btns:
             self.log("Кнопка следующей страницы не найдена.")
@@ -573,26 +584,48 @@ class ScraperApp:
             self.log("Это последняя страница.")
             return False
 
-        current_cards = self.driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
-        first_card = current_cards[0] if current_cards else None
         prev_page = self._get_current_page()
-
         self.driver.execute_script("arguments[0].click();", btn)
 
+        if not self._wait_for_page_change(prev_page):
+            self.log("Переход страницы занимает слишком долго. Проверьте капчу.")
+            messagebox.showinfo("1688_soft", "Если появилась капча — решите её и нажмите OK.")
+        return True
+
+    def _go_to_page(self, target_page):
         try:
-            if first_card is not None:
-                WebDriverWait(self.driver, 8).until(EC.staleness_of(first_card))
-            WebDriverWait(self.driver, 8).until(
+            input_el = self.driver.find_element(By.CSS_SELECTOR, ".paging-to-page .input-page")
+            btn = self.driver.find_element(By.CSS_SELECTOR, ".paging-to-page-button")
+        except Exception:
+            return False
+
+        prev_page = self._get_current_page()
+        try:
+            self.driver.execute_script(
+                "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', {bubbles: true}));",
+                input_el,
+                str(target_page),
+            )
+            self.driver.execute_script("arguments[0].click();", btn)
+        except Exception:
+            return False
+
+        if not self._wait_for_page_change(prev_page):
+            return False
+        return True
+
+    def _wait_for_page_change(self, prev_page):
+        try:
+            WebDriverWait(self.driver, PAGE_CHANGE_TIMEOUT).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, "a[class*='i18n-card-wrap']"))
             )
             if prev_page is not None:
-                WebDriverWait(self.driver, 8).until(
-                    lambda d: self._get_current_page() and self._get_current_page() > prev_page
+                WebDriverWait(self.driver, PAGE_CHANGE_TIMEOUT).until(
+                    lambda d: self._get_current_page() and self._get_current_page() != prev_page
                 )
-        except Exception:
-            self.log("Переход страницы занимает слишком долго. Проверьте капчу.")
-            messagebox.showinfo("1688_soft", "Если появилась капча — решите её и нажмите OK.")
             return True
+        except Exception:
+            return False
         return True
 
 
