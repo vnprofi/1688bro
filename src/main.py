@@ -146,6 +146,7 @@ class ScraperApp:
         self.subcategories = []
         self.subcategories_for_main = None
         self.running = False
+        self.stop_requested = False
 
         self.log_queue = queue.Queue()
 
@@ -218,8 +219,12 @@ class ScraperApp:
             row=0, column=0, sticky="ew", padx=(0, 8)
         )
         ttk.Button(actions, text="Начать парсинг", style="Primary.TButton", command=self.start_parsing).grid(
-            row=0, column=1, sticky="ew"
+            row=0, column=1, sticky="ew", padx=(0, 8)
         )
+        ttk.Button(actions, text="Стоп", style="Danger.TButton", command=self.stop_parsing).grid(
+            row=0, column=2, sticky="ew"
+        )
+        actions.columnconfigure(2, weight=0)
 
         params = ttk.LabelFrame(main_frame, text="Параметры", padding=12)
         params.grid(row=2, column=0, sticky="ew")
@@ -319,11 +324,19 @@ class ScraperApp:
         if self.running:
             self.log("Процесс уже выполняется.")
             return
+        self.stop_requested = False
         if not self.driver:
             messagebox.showwarning("1688_soft", "Сначала откройте браузер.")
             return
         self.running = True
         threading.Thread(target=self._parse_worker, daemon=True).start()
+
+    def stop_parsing(self):
+        if not self.running:
+            self.log("Нет активного процесса для остановки.")
+            return
+        self.stop_requested = True
+        self.log("Остановка запрошена. Завершаем после текущей операции...")
 
     def _parse_worker(self):
         try:
@@ -376,6 +389,7 @@ class ScraperApp:
                 time.sleep(1)
 
             page_num = 1
+            max_pages = self._get_total_pages() or MAX_PAGES
             total_items_collected = 0
 
             cols = [
@@ -394,7 +408,10 @@ class ScraperApp:
                 "Image",
             ]
 
-            while page_num <= MAX_PAGES:
+            while page_num <= max_pages:
+                if self.stop_requested:
+                    self.log("Остановлено пользователем.")
+                    break
                 self.log(f"--- Страница {page_num} ---")
 
                 items = scrape_items_on_page(self.driver, self.log)
@@ -422,29 +439,13 @@ class ScraperApp:
                     self.log(f"Собрано {len(items)} (Всего: {total_items_collected}). Сохранено в файл.")
 
                 try:
-                    next_btns = self.driver.find_elements(By.CSS_SELECTOR, ".fui-arrow.fui-next")
-                    if not next_btns:
+                    if self.stop_requested:
+                        self.log("Остановлено пользователем.")
                         break
 
-                    btn = next_btns[0]
-                    if "disabled" in btn.get_attribute("class") or "fui-prev-disabled" in btn.get_attribute("class"):
-                        self.log("Это последняя страница.")
+                    if not self._go_to_next_page(page_num, max_pages):
                         break
-
-                    current_cards = self.driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
-                    first_card = current_cards[0] if current_cards else None
-
-                    self.driver.execute_script("arguments[0].click();", btn)
                     page_num += 1
-
-                    try:
-                        if first_card is not None:
-                            WebDriverWait(self.driver, 6).until(EC.staleness_of(first_card))
-                        WebDriverWait(self.driver, 6).until(
-                            EC.presence_of_element_located((By.CSS_SELECTOR, "a[class*='i18n-card-wrap']"))
-                        )
-                    except Exception:
-                        time.sleep(0.2)
                 except Exception:
                     break
 
@@ -541,6 +542,58 @@ class ScraperApp:
 
         self.subcategories = available_subcats
         self.subcategories_for_main = main_idx
+
+    def _get_total_pages(self):
+        try:
+            num_elem = self.driver.find_element(By.CSS_SELECTOR, ".fui-paging-total .fui-paging-num")
+            total = int(num_elem.text.strip())
+            if total > 0:
+                return min(total, MAX_PAGES)
+        except Exception:
+            return None
+        return None
+
+    def _get_current_page(self):
+        try:
+            cur = self.driver.find_element(By.CSS_SELECTOR, ".fui-current.fui-page-item")
+            return int(cur.text.strip())
+        except Exception:
+            return None
+
+    def _go_to_next_page(self, current_page, max_pages):
+        if current_page >= max_pages:
+            self.log("Это последняя страница.")
+            return False
+        next_btns = self.driver.find_elements(By.CSS_SELECTOR, ".fui-arrow.fui-next")
+        if not next_btns:
+            self.log("Кнопка следующей страницы не найдена.")
+            return False
+        btn = next_btns[0]
+        if "disabled" in btn.get_attribute("class") or "fui-prev-disabled" in btn.get_attribute("class"):
+            self.log("Это последняя страница.")
+            return False
+
+        current_cards = self.driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
+        first_card = current_cards[0] if current_cards else None
+        prev_page = self._get_current_page()
+
+        self.driver.execute_script("arguments[0].click();", btn)
+
+        try:
+            if first_card is not None:
+                WebDriverWait(self.driver, 8).until(EC.staleness_of(first_card))
+            WebDriverWait(self.driver, 8).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "a[class*='i18n-card-wrap']"))
+            )
+            if prev_page is not None:
+                WebDriverWait(self.driver, 8).until(
+                    lambda d: self._get_current_page() and self._get_current_page() > prev_page
+                )
+        except Exception:
+            self.log("Переход страницы занимает слишком долго. Проверьте капчу.")
+            messagebox.showinfo("1688_soft", "Если появилась капча — решите её и нажмите OK.")
+            return True
+        return True
 
 
 def main():
