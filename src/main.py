@@ -672,11 +672,11 @@ class ScraperApp:
             for item in page_items:
                 if item.text.strip() == str(target_page):
                     self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
-                    time.sleep(0.3)
+                    time.sleep(0.2)
                     item.click()
                     if self._wait_for_page_change(current_page):
                         self.driver.execute_script("window.scrollTo(0, 0);")
-                        time.sleep(0.5)
+                        time.sleep(0.2)
                         return True
 
             input_el = self.driver.find_element(By.CSS_SELECTOR, ".paging-to-page .input-page")
@@ -686,9 +686,9 @@ class ScraperApp:
 
         try:
             input_el.clear()
-            time.sleep(0.2)
+            time.sleep(0.1)
             input_el.send_keys(str(target_page))
-            time.sleep(0.4)
+            time.sleep(0.2)
             self.driver.execute_script("arguments[0].click();", btn)
         except Exception:
             return False
@@ -696,7 +696,7 @@ class ScraperApp:
         if not self._wait_for_page_change(current_page):
             return False
         self.driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(0.5)
+        time.sleep(0.2)
         return True
 
     def _wait_for_page_change(self, prev_page):
