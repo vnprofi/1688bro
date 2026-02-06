@@ -30,43 +30,39 @@ def translate_text(text, target_lang="ru"):
         return text
 
 
-def smooth_scroll(driver):
-    scroll_position = 0
-    last_count = 0
-    stable_checks = 0
+def smooth_scroll(driver, scroll_pause_time=0.3):
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    while True:
+        driver.execute_script("window.scrollBy(0, 500);")
+        time.sleep(scroll_pause_time)
 
-    while stable_checks < 2:
-        scroll_position += 500
-        driver.execute_script(f"window.scrollTo(0, {scroll_position});")
-        time.sleep(0.4)
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        current_position = driver.execute_script("return window.pageYOffset + window.innerHeight")
 
-        cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
-        current_count = len(cards)
-
-        if current_count >= 55:
-            if current_count == last_count:
-                stable_checks += 1
-            else:
-                stable_checks = 0
-            last_count = current_count
-
-        page_height = driver.execute_script("return document.body.scrollHeight")
-        if scroll_position >= page_height:
-            break
+        if current_position >= new_height - 100:
+            time.sleep(1)
+            final_height = driver.execute_script("return document.body.scrollHeight")
+            if final_height == new_height:
+                break
+            last_height = final_height
+        else:
+            last_height = new_height
 
 
 def scrape_items_on_page(driver, log):
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, ".i18n-card-wrap[data-renderkey]"))
+        )
+    except Exception:
+        pass
+
     smooth_scroll(driver)
-    time.sleep(0.3)
+    driver.execute_script("window.scrollTo(0, 0);")
+    time.sleep(0.5)
 
-    cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
-
-    if len(cards) < 40:
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(0.5)
-        smooth_scroll(driver)
-        time.sleep(0.3)
-        cards = driver.find_elements(By.CSS_SELECTOR, "a[class*='i18n-card-wrap']")
+    cards = driver.find_elements(By.CSS_SELECTOR, "[data-renderkey]")
+    cards = [c for c in cards if "i18n-card-wrap" in c.get_attribute("class")]
 
     if not cards:
         return []
@@ -648,50 +644,47 @@ class ScraperApp:
         if current_page >= max_pages:
             self.log("Это последняя страница.")
             return False
-        try:
-            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(0.5)
-        except Exception:
-            pass
-
-        next_btns = self.driver.find_elements(By.CSS_SELECTOR, ".fui-arrow.fui-next")
-        if not next_btns:
-            self.log("Кнопка следующей страницы не найдена.")
-            return False
-        btn = next_btns[0]
-        if "disabled" in btn.get_attribute("class") or "fui-prev-disabled" in btn.get_attribute("class"):
-            self.log("Это последняя страница.")
-            return False
-
-        prev_page = self._get_current_page()
-        self.driver.execute_script("arguments[0].click();", btn)
-        time.sleep(1.5)
-
-        if not self._wait_for_page_change(prev_page):
-            self.log("Переход страницы занимает слишком долго. Проверьте капчу.")
-            messagebox.showinfo("1688_soft", "Если появилась капча — решите её и нажмите OK.")
-        return True
+        target_page = current_page + 1
+        if self._go_to_page(target_page):
+            return True
+        self.log("Не удалось перейти на следующую страницу.")
+        return False
 
     def _go_to_page(self, target_page):
         try:
+            current_page = self._get_current_page()
+            if current_page == target_page:
+                return True
+
+            page_items = self.driver.find_elements(By.CSS_SELECTOR, ".fui-page-item")
+            for item in page_items:
+                if item.text.strip() == str(target_page):
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", item)
+                    time.sleep(0.3)
+                    item.click()
+                    if self._wait_for_page_change(current_page):
+                        self.driver.execute_script("window.scrollTo(0, 0);")
+                        time.sleep(0.5)
+                        return True
+
             input_el = self.driver.find_element(By.CSS_SELECTOR, ".paging-to-page .input-page")
             btn = self.driver.find_element(By.CSS_SELECTOR, ".paging-to-page-button")
         except Exception:
             return False
 
-        prev_page = self._get_current_page()
         try:
-            self.driver.execute_script(
-                "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', {bubbles: true}));",
-                input_el,
-                str(target_page),
-            )
+            input_el.clear()
+            time.sleep(0.2)
+            input_el.send_keys(str(target_page))
+            time.sleep(0.4)
             self.driver.execute_script("arguments[0].click();", btn)
         except Exception:
             return False
 
-        if not self._wait_for_page_change(prev_page):
+        if not self._wait_for_page_change(current_page):
             return False
+        self.driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(0.5)
         return True
 
     def _wait_for_page_change(self, prev_page):
