@@ -225,16 +225,26 @@ class ScraperApp:
         actions.grid(row=1, column=0, sticky="ew", pady=(10, 8))
         actions.columnconfigure(0, weight=1)
         actions.columnconfigure(1, weight=1)
-        ttk.Button(actions, text="Открыть браузер", style="Ghost.TButton", command=self.start_browser).grid(
-            row=0, column=0, sticky="ew", padx=(0, 8)
-        )
+        actions.columnconfigure(2, weight=1)
+        actions.columnconfigure(3, weight=0)
+        ttk.Button(
+            actions,
+            text="Открыть CN",
+            style="Ghost.TButton",
+            command=lambda: self.start_browser("https://alibaba.cn"),
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 8))
+        ttk.Button(
+            actions,
+            text="Открыть RU",
+            style="Ghost.TButton",
+            command=lambda: self.start_browser("https://www.1688.com/?spm=a26352.13672862.topmenu.logo"),
+        ).grid(row=0, column=1, sticky="ew", padx=(0, 8))
         ttk.Button(actions, text="Начать парсинг", style="Primary.TButton", command=self.start_parsing).grid(
-            row=0, column=1, sticky="ew", padx=(0, 8)
+            row=0, column=2, sticky="ew", padx=(0, 8)
         )
         ttk.Button(actions, text="Стоп", style="Danger.TButton", command=self.stop_parsing).grid(
-            row=0, column=2, sticky="ew"
+            row=0, column=3, sticky="ew"
         )
-        actions.columnconfigure(2, weight=0)
 
         params = ttk.LabelFrame(main_frame, text="Параметры", padding=12)
         params.grid(row=2, column=0, sticky="ew")
@@ -324,7 +334,7 @@ class ScraperApp:
         if path:
             self.export_path_var.set(path)
 
-    def start_browser(self):
+    def start_browser(self, url):
         if self.running:
             self.log("Процесс уже выполняется.")
             return
@@ -332,9 +342,9 @@ class ScraperApp:
             self.log("Браузер уже открыт.")
             return
         self.running = True
-        threading.Thread(target=self._start_browser_worker, daemon=True).start()
+        threading.Thread(target=self._start_browser_worker, args=(url,), daemon=True).start()
 
-    def _start_browser_worker(self):
+    def _start_browser_worker(self, url):
         try:
             options = webdriver.ChromeOptions()
             options.add_argument("--start-maximized")
@@ -343,8 +353,10 @@ class ScraperApp:
             options.add_experimental_option("useAutomationExtension", False)
 
             self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-            self.log("Открываем https://alibaba.cn ...")
-            self.driver.get("https://alibaba.cn")
+            self.log(f"Открываем {url} ...")
+            self.driver.get(url)
+            if "1688.com" in url:
+                self.log("RU версия: интерфейс на русском, но подкатегорий меньше.")
             self.log("ЭТАП 1: ВХОД")
             self.log("1. Войдите в аккаунт.")
             self.log("2. После входа нажмите 'Начать парсинг'.")
